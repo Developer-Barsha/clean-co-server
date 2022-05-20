@@ -5,6 +5,7 @@ const port = process.env.PORT || 5000;
 const jwt = require('jsonwebtoken');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 require('dotenv').config();
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 app.use(cors())
 app.use(express.json());
@@ -54,6 +55,18 @@ async function run() {
             const services = await cursor.toArray();
             res.send(services);
         })
+
+        app.post('/create-payment-intent', verifyJWT, async(req, res) =>{
+            const service = req.body;
+            const price = service.price;
+            const amount = price*100;
+            const paymentIntent = await stripe.paymentIntents.create({
+              amount : amount,
+              currency: 'usd',
+              payment_method_types:['card']
+            });
+            res.send({clientSecret: paymentIntent.client_secret})
+          });
 
         app.get('/user', verifyJWT, async (req, res) => {
             const users = await userCollection.find().toArray();
@@ -105,7 +118,7 @@ async function run() {
 
         app.delete('/doctor/:email', verifyJWT, async (req, res) => {
             const email = req.params.email;
-            const filter = {email : email};
+            const filter = { email: email };
             const result = await doctorCollection.deleteOne(filter);
             res.send(result);
         })
@@ -145,11 +158,11 @@ async function run() {
             }
         })
 
-        app.get('/booking', async (req, res) => {
-            const query = {};
-            const cursor = bookingCollection.find(query);
-            const bookings = await cursor.toArray();
-            res.send(bookings);
+        app.get('/booking/:id', verifyJWT, async (req, res) => {
+            const id = req.params.id;
+            const query = { _id: ObjectId(id) };
+            const booking = await bookingCollection.findOne(query);
+            res.send(booking);
         })
 
         // WARNING :
